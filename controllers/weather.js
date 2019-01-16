@@ -1,37 +1,72 @@
 var request = require("request");
+var fs = require("fs");
 
 var dark_sky_uril= "https://api.darksky.net";
 var dark_sky_key = "eb51f2eb91f67935501b543af49ff39b";
 
 exports.getWeatherByLonLat = (latitude, longitude, done) => {
 
-    //get weather forecast
-    request({
-        method : 'GET',
-        url    : `${dark_sky_uril}/forecast/${dark_sky_key}/${latitude},${longitude}`
-    }, function(err,httpResponse,body){
+    //check cache for data
+    let latCache = ((latitude < 0) ? 'neg': '') + Math.abs(latitude);
+    let lonCache = ((longitude < 0) ? 'neg': '') + Math.abs(longitude);
+    let cachePath = `./cache/${latCache}-${lonCache}.json`;
 
-        if (!err &&  httpResponse.statusCode === 200){
+    fs.readFile(cachePath, 'utf8', (err, data) => {
+        if (err){
+                //get weather forecast
+            request({
+                method : 'GET',
+                url    : `${dark_sky_uril}/forecast/${dark_sky_key}/${latitude},${longitude}`
+            }, function(err,httpResponse,body){
 
-            try
-            {
-                let forecastJSON = JSON.parse(body);
-                let dailyForecast = forecastJSON.daily;
+                if (!err &&  httpResponse.statusCode === 200){
 
-                let focastResults = {
-                    dailyForecast
+                    try
+                    {
+                        let forecastJSON = JSON.parse(body);
+                        let dailyForecast = forecastJSON.daily;
+
+                        let focastResults = {
+                            dailyForecast
+                        }
+
+                        //store in cache
+                        fs.writeFile(cachePath, JSON.stringify(focastResults), (err) => {
+                            if (err) {
+                                done(err)
+                            }else{
+                                done(null, focastResults);
+
+                            }
+                        });
+                        
+                    }
+                    catch(e)
+                    {
+                        done(e);
+                    }
+
+                }else{
+                    done(new Error('Weather Forecast API Error: ' + (httpResponse && httpResponse.statusMessage) ? httpResponse.statusMessage : err))
                 }
-
-                done(null, focastResults);
-            }
-            catch(e)
-            {
-                done(e);
-            }
-
+            });
         }else{
-            done(new Error('Weather Forecast API Error: ' + (httpResponse && httpResponse.statusMessage) ? httpResponse.statusMessage : err))
+
+            if (data){
+                try{
+                    let cachedForecastResults = JSON.parse(data);
+                    done(null, cachedForecastResults);
+                }catch(e){
+                    done(e);
+                }
+            }else{
+                done(null, null)
+            }
+           
         }
-    });
+        
+      });
+
+
 
 }
